@@ -347,6 +347,7 @@ INSTALL(  FILES
 )
 
 SET( zypp_parser_SRCS
+  parser/Augeas.cc
   parser/ParseException.cc
   parser/IniParser.cc
   parser/IniDict.cc
@@ -358,6 +359,7 @@ SET( zypp_parser_SRCS
 )
 
 SET( zypp_parser_HEADERS
+  parser/Augeas.h
   parser/ParseException.h
   parser/IniParser.h
   parser/IniDict.h
@@ -923,6 +925,7 @@ SET_TARGET_PROPERTIES( zypp PROPERTIES SOVERSION "${LIBZYPP_SOVERSION_INFO}" )
 ADD_DEPENDENCIES(zypp schema_header)
 # System libraries
 SET(UTIL_LIBRARY util)
+TARGET_LINK_LIBRARIES(zypp ${AUGEAS_LIBRARY})
 TARGET_LINK_LIBRARIES(zypp ${UTIL_LIBRARY} )
 TARGET_LINK_LIBRARIES(zypp ${RPM_LIBRARY} )
 TARGET_LINK_LIBRARIES(zypp ${GETTEXT_LIBRARIES} )
