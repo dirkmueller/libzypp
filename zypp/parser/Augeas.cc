@@ -10,6 +10,7 @@
 #include <iostream>
 #include <stdlib.h>
 
+#include "zypp/base/Easy.h"
 #include "zypp/base/String.h"
 #include "zypp/base/Exception.h"
 #include "zypp/base/Gettext.h"
@@ -23,7 +24,7 @@ using namespace std;
 namespace zypp {
 namespace parser {
 
-Augeas::Augeas(const string &module_lens, const string & filepath)
+Augeas::Augeas(const string &module_lens, const string & fileExpr)
   : _augeas(NULL)
 {
   //MIL << "Going to read zypper config using Augeas..." << endl;
@@ -33,28 +34,13 @@ Augeas::Augeas(const string &module_lens, const string & filepath)
   if (_augeas == NULL)
     ZYPP_THROW(Exception(_("Cannot initialize configuration file parser.")));
 
-  if (::aug_set(_augeas, "/augeas/load/ZYpp/incl", filepath.c_str()) != 0)
-      ZYPP_THROW(Exception(_("Augeas error: setting config file to load failed.")));
 
   if (::aug_set(_augeas, "/augeas/load/ZYpp/lens", module_lens.c_str()) != 0)
       ZYPP_THROW(Exception(_("Augeas error: setting the lens to load failed.")));
 
-  // load the file
-  if (aug_load(_augeas) != 0)
-    ZYPP_THROW(Exception(_("Could not parse the config files.")));
-
-  // collect eventual errors
-  const char *value[1] = {};
-  string error;
-
-  ::aug_get(_augeas, (Pathname("/files") / filepath).c_str(), NULL) != 0;
-  if (::aug_get(_augeas, (Pathname("/augeas/files") / filepath / "/error/message").c_str(), value))
-      error = value[0];
-
-  if (!error.empty()) {
-      string msg = str::form(_("Error parsing %s\n %s"), filepath.c_str(), error.c_str());
-    ZYPP_THROW(Exception(msg));
-  }
+  includeExpression(fileExpr);
+  load();
+  throwErrors();
 }
 
 // ---------------------------------------------------------------------------
@@ -67,6 +53,38 @@ Augeas::~Augeas()
 
 // ---------------------------------------------------------------------------
 
+void Augeas::throwErrors()
+{
+  Exception augExcpt(_("Problem when parsing configuration files"));
+
+  vector<string> errors(match("/augeas//error"));
+  for_(it, errors.begin(), errors.end()) {
+    augExcpt.addHistory(get(*it));
+  }
+
+  if (!augExcpt.historyEmpty())
+      ZYPP_THROW(augExcpt);
+}
+
+// ---------------------------------------------------------------------------
+
+void Augeas::includeExpression(const std::string &fileExpr)
+{
+  if (::aug_set(_augeas, "/augeas/load/ZYpp/incl", fileExpr.c_str()) != 0)
+      ZYPP_THROW(Exception(_("Augeas error: setting config file to load failed.")));
+}
+
+// ---------------------------------------------------------------------------
+
+void Augeas::load()
+{
+  // load the file
+  if (aug_load(_augeas) != 0)
+    ZYPP_THROW(Exception(_("Could not parse the config files.")));
+}
+
+// ---------------------------------------------------------------------------
+
 string Augeas::get(const string & augpath) const
 {
   const char *value[1] = {};
@@ -74,7 +92,7 @@ string Augeas::get(const string & augpath) const
   if (result != 0)
   {
     DBG << "Got " << augpath << " = " << value[0] << endl;
-    return value[0];
+    return value[0] ? value[0] : string();
   }
   else if (result == 0)
     DBG << "No match for " << augpath << endl;

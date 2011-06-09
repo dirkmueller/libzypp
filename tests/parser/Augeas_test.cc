@@ -1,40 +1,40 @@
+#include <iostream>
 #include <sstream>
 #include <string>
+#include <vector>
 #include <zypp/parser/Augeas.h>
 #include <zypp/base/NonCopyable.h>
 
 #include "TestSetup.h"
 
-using std::stringstream;
-using std::string;
+using namespace std;
 using namespace zypp;
 
-static string suse_repo = "[factory-oss]\n"
-"name=factory-oss\n"
-"enabled=1\n"
-"autorefresh=0\n"
-"baseurl=http://download.opensuse.org/factory-tested/repo/oss/\n"
-"type=yast2\n"
-"keeppackages=0\n";
-
-static string fedora_repo = "[fedora]\n"
-"name=Fedora $releasever - $basearch\n"
-"failovermethod=priority\n"
-"#baseurl=http://download.fedora.redhat.com/pub/fedora/linux/releases/$releasever/Everything/$basearch/os/\n"
-"#mirrorlist=http://mirrors.fedoraproject.org/mirrorlist?repo=fedora-$releasever&arch=$basearch\n"
-"mirrorlist=file:///etc/yum.repos.d/local.mirror\n"
-"enabled=1\n"
-"gpgcheck=1\n"
-"gpgkey=file:///etc/pki/rpm-gpg/RPM-GPG-KEY-fedora file:///etc/pki/rpm-gpg/RPM-GPG-KEY\n";
-
 // Must be the first test!
-BOOST_AUTO_TEST_CASE(read_repo_file)
+BOOST_AUTO_TEST_CASE(augeas_read_repo_file)
 {
-  parser::Augeas augeas("Yum.lns", "/etc/zypp/repos.d/systemsmanagement_wbem.repo");
+  parser::Augeas augeas("Yum.lns", TESTS_SRC_DIR "/parser/inifile/data/*.ini");
   {
-      BOOST_CHECK_EQUAL("lala", augeas.get("/files/etc/zypp/repos.d/systemsmanagement_wbem.repo"));
+      vector<string> ret = augeas.match(("/files" TESTS_SRC_DIR "/parser/inifile/data/*/*"));
 
-     BOOST_CHECK_EQUAL(0, augeas.match("/files/etc/zypp/repos.d/systemsmanagement_wbem.repo/*").size());
+      // 8 repositories in the fixtures
+      BOOST_CHECK_EQUAL(8, ret.size());
 
+      // check that some elements are there
+      BOOST_CHECK(find(ret.begin(), ret.end(),
+                       "/files" TESTS_SRC_DIR "/parser/inifile/data/1.ini/base") != ret.end());
+      BOOST_CHECK(find(ret.begin(), ret.end(),
+                       "/files" TESTS_SRC_DIR "/parser/inifile/data/2.ini/equal") != ret.end());
+
+      BOOST_CHECK_EQUAL("http://mirror.centos.org/centos/RPM-GPG-KEY-centos4",
+                        augeas.get("/files" TESTS_SRC_DIR "/parser/inifile/data/1.ini/update/gpgkey"));
+
+      BOOST_CHECK_EQUAL(string(),
+                        augeas.get("/files/wrongpath"));
+
+      // all repos
+      for_ (it, ret.begin(), ret.end()) {
+          cout << *it << endl;;
+      }
   }
 }

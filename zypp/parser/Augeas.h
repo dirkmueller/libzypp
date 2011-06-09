@@ -47,11 +47,31 @@ public:
   Augeas(const std::string &module_lens, const std::string & file = "");
   ~Augeas();
 
+  /**
+   * Add files
+   * Example:
+   * \code
+   *   augeas.includeExpression("/etc/zypp/repos.d/SLE-*.repo");
+   * \endcode
+   */
+  void includeExpression(const std::string &fileExpr);
+
+  /**
+   * Loads the virtual /files tree
+   */
+  void load();
+
   std::string get(const std::string & augpath) const;
 
   std::vector<std::string> match(const std::string & augpath) const;
 
 private:
+
+  /**
+   * Throws an exception for pending augeas errors
+   */
+  void throwErrors();
+
   ::augeas * _augeas;
 };
 
