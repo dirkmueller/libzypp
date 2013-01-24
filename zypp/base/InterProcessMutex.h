@@ -1,129 +1,100 @@
+/*---------------------------------------------------------------------\
+|                          ____ _   __ __ ___                          |
+|                         |__  / \ / / . \ . \                         |
+|                           / / \ V /|  _/  _/                         |
+|                          / /__ | | | | | |                           |
+|                         /_____||_| |_| |_|                           |
+|                                                                      |
+\---------------------------------------------------------------------*/
+/** \file	zypp/base/InterProcessMutex.h
+ *
+*/
 
 #ifndef ZYPP_BASE_INTER_PROCESS_MUTEX_H
 #define ZYPP_BASE_INTER_PROCESS_MUTEX_H
 
 #include <string>
-#include "zypp/base/Fd.h"
-#include "zypp/base/Exception.h"
-#include "zypp/base/NonCopyable.h"
-#include "zypp/Pathname.h"
 
+#include <boost/interprocess/sync/file_lock.hpp>
+#include <boost/interprocess/sync/sharable_lock.hpp>
+#include <boost/interprocess/sync/scoped_lock.hpp>
+
+#include <boost/date_time/posix_time/posix_time.hpp>
+
+///////////////////////////////////////////////////////////////////
 namespace zypp
 {
-namespace base
-{
+  class Pathname;
 
-class ZYppLockedException : public Exception
-{
-public:
-    ZYppLockedException( const std::string & msg_r,
-                         const std::string &name,
-                         pid_t locker_pid );
-    virtual ~ZYppLockedException() throw();
-    pid_t locker_pid() const { return _locker_pid; }
-    std::string name() const { return _name; }
-private:
-    pid_t _locker_pid;
-    std::string _name;
-};
-
-/**
- *
- * Inter process scoped lock implementation
- *
- * This mutex will allow only one writer process to
- * reach a critical region protected by a mutex
- * of the same name, if there are no readers
- * at the same time.
- *
- * Multiple readers are allowed if there is no
- * currently a writer.
- *
- */
-class InterProcessMutex : private base::NonCopyable
-{
-public:
-   /**
-    * Processes can be of two types
-    * Reader or Writer
-    */
-    enum ConsumerType
+  ///////////////////////////////////////////////////////////////////
+  namespace base
+  {
+    ///////////////////////////////////////////////////////////////////
+    /// \class InterProcessMutex
+    /// \brief Wrapper around boost::interprocess::file_lock mutex
+    ///
+    /// Wrapper to ease handling, loging and debuging. Used e.g. in
+    /// class \ref IPMutex.
+    ///
+    /// \see http://www.boost.org/doc/html/boost/interprocess/file_lock.html
+    ///////////////////////////////////////////////////////////////////
+    class InterProcessMutex : public boost::interprocess::file_lock
     {
-        Reader,
-        Writer
+    public:
+      /** Underlying boost::interprocess::mutex */
+      typedef boost::interprocess::file_lock				lock_type;
+      /** Native exceptions thrown by this class. */
+      typedef boost::interprocess::interprocess_exception		exception_type;
+
+      /** Aquire and automatically release a shared lock. */
+      typedef boost::interprocess::sharable_lock<InterProcessMutex>	SharableLock;
+      /** Aquire and automatically release an exclusive lock. */
+      typedef boost::interprocess::scoped_lock<InterProcessMutex>	ScopedLock;
+
+    public:
+      InterProcessMutex();
+      InterProcessMutex( const char * name_r );
+      InterProcessMutex( const std::string & name_r );
+      InterProcessMutex( const Pathname & name_r );
+
+      InterProcessMutex( BOOST_RV_REF(InterProcessMutex) moved_r );
+      InterProcessMutex & operator=( BOOST_RV_REF(InterProcessMutex) moved_r );
+
+      void swap( InterProcessMutex & other_r );
+
+    public:
+      /** \name Exclusive locking */
+      //@{
+	void lock();
+	bool try_lock();
+	bool timed_lock( const boost::posix_time::ptime & abs_time_r );
+	void unlock();
+      //@}
+
+    public:
+      /** \name Sharable locking */
+      //@{
+	void lock_sharable();
+	bool try_lock_sharable();
+	bool timed_lock_sharable( const boost::posix_time::ptime & abs_time_r );
+	void unlock_sharable();
+      //@}
+
+    public:
+      /** Convenience for timed_* methods.
+       * \code
+       *   InterProcessMutex m;
+       *   m.timed_lock_sharable( InterProcessMutex::wait( 5 ) ); // timeout in 5 seconds
+       * \endcode
+       */
+      static boost::posix_time::ptime wait( unsigned seconds_r )
+      { return boost::posix_time::second_clock::universal_time() + boost::posix_time::seconds( seconds_r ); }
     };
+    ///////////////////////////////////////////////////////////////////
 
-   /**
-    * options to alter the mutex behavor
-    */
-   class Options
-   {
-   public:
-       /**
-        * Options for a mutex of type \ref ptype
-        * with a given name and timeout.
-        * Default is name "zypp" and no timeout
-        * (wait till resource is free)
-        *
-        * The mutex type, Writer or Reader must be
-        * given explictly.
-        *
-        * The mutex will be handled using a lock file
-        * located on default library path if the
-        * library is running as root, and in users home
-        * directory if not.
-        *
-        */
-       Options( ConsumerType ptype,
-                const std::string &pname = "zypp",
-                int ptimeout = -1 );
-
-       /**
-        * set the path where the lockfile is
-        * created.
-        */
-       void setPath( const Pathname &base );
-
-       std::string name;
-       int timeout;
-       ConsumerType type;
-       Pathname base;
-   };
-    
-   /**
-    * Creates a mutex with a name and a timeout.
-    *
-    * default timeout is -1 which means no timeout
-    * at all, and the mutex will wait forever if
-    * other process is accessing the critical region
-    * for a mutex in with the same name.
-    *
-    * If the timeout is 0, then if the lock is acquired
-    * an exception will be thrown inmediately.
-    *
-    * Otherwise, the timeout exception will come after
-    * the timeout is reached.
-    *
-    */
-    InterProcessMutex( const Options &poptions );
-
-    /**
-     * Destructor, gives up the lock on the named
-     * resource.
-     */
-    ~InterProcessMutex();
-
-private:
-    bool isProcessRunning(pid_t pid_r);
-    Pathname lockFilePath() const;
-private:
-    shared_ptr<Fd> _fd;
-    Options _options;
-};
-
-
-} }
-
-
+  } // namespace base
+  ///////////////////////////////////////////////////////////////////
+} // namespace zypp
+///////////////////////////////////////////////////////////////////
 #endif
 

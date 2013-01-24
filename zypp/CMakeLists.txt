@@ -36,6 +36,7 @@ SET( zypp_SRCS
   HistoryLogData.cc
   IdString.cc
   InstanceId.cc
+  IPMutex.cc
   KeyRing.cc
   Locks.cc
   MediaProducts.cc
@@ -124,6 +125,7 @@ SET( zypp_HEADERS
   IdString.h
   IdStringType.h
   InstanceId.h
+  IPMutex.h
   KeyContext.h
   KeyRing.h
   KVMap.h
