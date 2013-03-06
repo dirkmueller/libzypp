@@ -1,59 +1,74 @@
 #include "Tools.h"
-#include <zypp/ResObjects.h>
+#include <sys/wait.h>
+#include <zypp/IPMutex.h>
 
-#include <zypp/sat/LookupAttr.h>
-#include <zypp/PoolQuery.h>
-#include <zypp/sat/AttrMatcher.h>
-
-static const Pathname sysRoot( "/tmp/ToolScanRepos" );
-
-void addInstall( const std::string & pkgspec_r )
+int lockStatus()
 {
-  bool rewrote( false );
-  Capability pkgspec( Capability::guessPackageSpec( pkgspec_r, rewrote ) );
-  MIL << "Add '" << pkgspec << "' for '" << pkgspec_r << "'" << endl;
-  ResPool::instance().resolver().addRequire( pkgspec );
-}
-
-void addConflict( const std::string & pkgspec_r )
-{
-  bool rewrote( false );
-  Capability pkgspec( Capability::guessPackageSpec( pkgspec_r, rewrote ) );
-  MIL << "Con '" << pkgspec << "' for '" << pkgspec_r << "'" << endl;
-  ResPool::instance().resolver().addConflict( pkgspec );
-}
-
-bool solve()
-{
-  bool rres = false;
+#if ( 1 )
+  #define FOR fork()
+  #define EXI exit
+#else
+  #define FOR 0
+  #define EXI return
+#endif
+  int pid = FOR;
+  if ( pid < 0 )
   {
-    //zypp::base::LogControl::TmpLineWriter shutUp;
-    //ResPool::instance().resolver().setOnlyRequires( true );
-    rres = ResPool::instance().resolver().resolvePool();
+    ERR << "lockStatus failed" << endl;
+    return 98;
   }
-  if ( ! rres )
+  else if ( pid == 0 )
   {
-    ERR << "resolve " << rres << endl;
-    ResPool::instance().resolver().problems();
-    return false;
+    // child:
+    zypp::base::LogControl::TmpLineWriter shutUp;
+    base::InterProcessMutex qmutex( "/var/run/zypp/common.lck" );
+    if ( qmutex.try_lock() )
+    {
+      qmutex.unlock();
+      EXI( 0 );
+    }
+    else if ( qmutex.try_lock_sharable() )
+    {
+      qmutex.unlock_sharable();
+      EXI( 1 );
+    }
+    else
+    {
+      EXI( 2 );
+    }
+    EXI( 13 );
   }
-  MIL << "resolve " << rres << endl;
-  vdumpPoolStats( USR << "Transacting:"<< endl,
-		  make_filter_begin<resfilter::ByTransact>(ResPool::instance()),
-                  make_filter_end<resfilter::ByTransact>(ResPool::instance()) ) << endl;
+  else
+  {
+    // parent:
+    int ret;
+    int status = 0;
+    do
+    {
+      ret = waitpid( pid, &status, 0 );
+    }
+    while ( ret == -1 && errno == EINTR );
 
-  return true;
+    if ( WIFEXITED( status ) )
+    {
+      _MIL("___MTX___") << "lockStatus " << WEXITSTATUS( status ) << endl;
+      return WEXITSTATUS( status );
+    }
+    _ERR("___MTX___") << "lockStatus failed" << endl;
+    return 99;
+  }
 }
 
-bool install()
+std::ostream & operator<<( std::ostream & str, const IPMutex::SharableLock & obj )
 {
-  ZYppCommitPolicy pol;
-  pol.dryRun( true );
-  pol.rpmInstFlags( pol.rpmInstFlags().setFlag( target::rpm::RPMINST_JUSTDB ) );
-  SEC << getZYpp()->commit( pol ) << endl;
-  return true;
+  return str << obj.owns() << '(' << lockStatus() << ')';
+}
+std::ostream & operator<<( std::ostream & str, const IPMutex::ScopedLock & obj )
+{
+  return str << obj.owns() << '(' << lockStatus() << ')';
 }
 
+#define LTAG(X) MIL << X << " " << #X << endl
 
 /******************************************************************
 **
@@ -64,19 +79,24 @@ int main( int argc, char * argv[] )
 {
   INT << "===[START]==========================================" << endl;
   ///////////////////////////////////////////////////////////////////
-  if ( sysRoot == "/" )
-    ::unsetenv( "ZYPP_CONF" );
-  TestSetup::LoadSystemAt( sysRoot, Arch_x86_64 );
-  ///////////////////////////////////////////////////////////////////
-  ResPool   pool( ResPool::instance() );
-  sat::Pool satpool( sat::Pool::instance() );
-  ///////////////////////////////////////////////////////////////////
 
-//   addConflict( "kernel-default" );
-//   addConflict( "kernel-default-base" );
-  addInstall( "test");
-  solve();
+  IPMutex mutex;
+  {
+    IPMutex::SharableLock slock( mutex );
+    IPMutex::SharableLock slocka( IPMutex::SharableLock( mutex ) );
+    LTAG( slock );
+    sleep( 3 );
+    {
+      IPMutex::SharableLock slock2( mutex );
+      LTAG( slock );
+      LTAG( slock2 );
+      sleep( 3 );
+    }
+    LTAG( slock );
+    sleep( 3 );
+  }
 
+  ///////////////////////////////////////////////////////////////////
   INT << "===[END]============================================" << endl << endl;
   return 0;
 }
