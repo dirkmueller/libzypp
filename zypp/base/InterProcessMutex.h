@@ -15,7 +15,6 @@
 
 #include <string>
 
-#include <boost/interprocess/sync/file_lock.hpp>
 #include <boost/interprocess/sync/sharable_lock.hpp>
 #include <boost/interprocess/sync/scoped_lock.hpp>
 
@@ -47,9 +46,6 @@ namespace zypp
     class InterProcessMutex
     {
     public:
-      /** Underlying boost::interprocess::mutex */
-      typedef boost::interprocess::file_lock lock_type;
-
       /** Native exceptions thrown by this class. */
       typedef boost::interprocess::interprocess_exception exception_type;
 
@@ -75,6 +71,13 @@ namespace zypp
        * \endcode
        */
       typedef boost::interprocess::sharable_lock<InterProcessMutex>	SharableLock;
+//       class SharableLock : private base::NonCopyable
+//       {
+//       public:
+// 	SharableLock();
+// 	explicit SharableLock( InterProcessMutex & mutex_r );
+//       public:
+//       };
 
       /** Aquire and automatically release an exclusive lock.
        * \code
@@ -100,13 +103,32 @@ namespace zypp
       typedef boost::interprocess::scoped_lock<InterProcessMutex>	ScopedLock;
 
     public:
+      /** Default Ctor (use as placeholder only) */
       InterProcessMutex();
-      InterProcessMutex( const char * name_r );
-      InterProcessMutex( const std::string & name_r );
-      InterProcessMutex( const Pathname & name_r );
+      /** Ctor creating mutex for \a path_r  */
+      explicit InterProcessMutex( const char * path_r );
+      /** \overload */
+      explicit InterProcessMutex( const std::string & path_r );
+      /** \overload */
+      explicit InterProcessMutex( const Pathname & path_r );
 
     public:
-      /** \name Exclusive locking */
+      /** Representing the mutex internal state */
+      enum State
+      { UNLOCKED, SHARED_LOCK, EXCLUSIVE_LOCK };
+
+      /** Return the mutex internal state */
+      State state() const;
+
+      /** String representation of mutex state (for logging) */
+      std::string asString() const;
+
+    public:
+      /** \name Exclusive locking
+       * Basically the native boost api to support
+       * \c boost::interprocess::scoped_lock<InterProcessMutex>
+       * though \ref SharableLock and \ref ScopedLock are preferred.
+       */
       //@{
 	void lock();
 	bool try_lock();
@@ -117,7 +139,11 @@ namespace zypp
       //@}
 
     public:
-      /** \name Sharable locking */
+      /** \name Sharable locking
+       * Basically the native boost api to support
+       * \c boost::interprocess::sharable_lock<InterProcessMutex>
+       * though \ref SharableLock and \ref ScopedLock are preferred.
+       */
       //@{
 	void lock_sharable();
 	bool try_lock_sharable();
@@ -138,20 +164,22 @@ namespace zypp
       { return boost::posix_time::second_clock::universal_time() + boost::posix_time::seconds( seconds_r ); }
 
     public:
-      /** Implict conversion to \ref lock_type & */
-      operator lock_type &() { return *_mutex; }
-      /** \overload const version */
-      operator const lock_type &() const { return *_mutex; }
-
-      /** Explicit conversion to \ref lock_type & */
-      lock_type & mutex() { return *_mutex; }
-      /** \overload const version */
-      const lock_type & mutex() const { return *_mutex; }
-
+      class Impl;
     private:
-      RW_pointer<lock_type> _mutex;
+      RW_pointer<Impl> _pimpl;
   };
-    ///////////////////////////////////////////////////////////////////
+  ///////////////////////////////////////////////////////////////////
+
+  /** \relates InterProcessMutex::State String representation */
+  std::string asString( const InterProcessMutex::State obj );
+
+  /** \relates InterProcessMutex::State Stream output */
+  inline std::ostream & operator<<( std::ostream & str, const InterProcessMutex::State obj )
+  { return str << asString( obj ); }
+
+  /** \relates InterProcessMutex Stream output */
+  inline std::ostream & operator<<( std::ostream & str, const InterProcessMutex & obj )
+  { return str << obj.asString(); }
 
   } // namespace base
   ///////////////////////////////////////////////////////////////////

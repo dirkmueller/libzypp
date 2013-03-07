@@ -4,39 +4,29 @@
 
 int lockStatus()
 {
-#if ( 1 )
-  #define FOR fork()
-  #define EXI exit
-#else
-  #define FOR 0
-  #define EXI return
-#endif
-  int pid = FOR;
+  int pid = fork();
   if ( pid < 0 )
   {
-    ERR << "lockStatus failed" << endl;
+    ERR << "lockStatus fork failed" << endl;
     return 98;
   }
   else if ( pid == 0 )
   {
     // child:
     zypp::base::LogControl::TmpLineWriter shutUp;
-    base::InterProcessMutex qmutex( "/var/run/zypp/common.lck" );
+    boost::interprocess::file_lock qmutex( "/var/run/zypp/common.lck" );
     if ( qmutex.try_lock() )
     {
       qmutex.unlock();
-      EXI( 0 );
+      exit( 0 );
     }
     else if ( qmutex.try_lock_sharable() )
     {
       qmutex.unlock_sharable();
-      EXI( 1 );
+      exit( 1 );
     }
-    else
-    {
-      EXI( 2 );
-    }
-    EXI( 13 );
+    // else
+    exit( 2 );
   }
   else
   {
@@ -61,14 +51,14 @@ int lockStatus()
 
 std::ostream & operator<<( std::ostream & str, const IPMutex::SharableLock & obj )
 {
-  return str << obj.owns() << '(' << lockStatus() << ')';
+  return str << obj.owns() << '(' << lockStatus() << ')' << '(' << *obj.mutex() << ')';
 }
 std::ostream & operator<<( std::ostream & str, const IPMutex::ScopedLock & obj )
 {
-  return str << obj.owns() << '(' << lockStatus() << ')';
+  return str << obj.owns() << '(' << lockStatus() << ')' << '(' << *obj.mutex() << ')';
 }
 
-#define LTAG(X) MIL << X << " " << #X << endl
+#define LTAG(X) MIL << X << " " << #X << endl; WAR << *X.mutex() << endl;
 
 /******************************************************************
 **
@@ -83,7 +73,6 @@ int main( int argc, char * argv[] )
   IPMutex mutex;
   {
     IPMutex::SharableLock slock( mutex );
-    IPMutex::SharableLock slocka( IPMutex::SharableLock( mutex ) );
     LTAG( slock );
     sleep( 3 );
     {
@@ -91,6 +80,7 @@ int main( int argc, char * argv[] )
       LTAG( slock );
       LTAG( slock2 );
       sleep( 3 );
+      INT << IPMutex() << endl;
     }
     LTAG( slock );
     sleep( 3 );
