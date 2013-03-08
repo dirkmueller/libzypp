@@ -1,6 +1,11 @@
 #include "Tools.h"
 #include <sys/wait.h>
+
 #include <zypp/IPMutex.h>
+
+#include <boost/interprocess/sync/file_lock.hpp>
+#include <boost/interprocess/sync/sharable_lock.hpp>
+#include <boost/interprocess/sync/scoped_lock.hpp>
 
 int lockStatus()
 {
@@ -51,14 +56,14 @@ int lockStatus()
 
 std::ostream & operator<<( std::ostream & str, const IPMutex::SharableLock & obj )
 {
-  return str << obj.owns() << '(' << lockStatus() << ')' << '(' << *obj.mutex() << ')';
+  return str << obj.owns() << '(' << lockStatus() << ')' << '(' << obj.mutex() << ')';
 }
 std::ostream & operator<<( std::ostream & str, const IPMutex::ScopedLock & obj )
 {
-  return str << obj.owns() << '(' << lockStatus() << ')' << '(' << *obj.mutex() << ')';
+  return str << obj.owns() << '(' << lockStatus() << ')' << '(' << obj.mutex() << ')';
 }
 
-#define LTAG(X) MIL << X << " " << #X << endl; WAR << *X.mutex() << endl;
+#define LTAG(X) MIL << X << " " << #X << endl;
 
 /******************************************************************
 **
@@ -85,6 +90,7 @@ int main( int argc, char * argv[] )
     LTAG( slock );
     sleep( 3 );
   }
+  MIL << '-' << '(' << lockStatus() << ')' << '(' << mutex << ')' <<endl;
 
   ///////////////////////////////////////////////////////////////////
   INT << "===[END]============================================" << endl << endl;

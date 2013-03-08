@@ -152,6 +152,58 @@ namespace zypp
     std::ostream & operator<<( std::ostream & str, const InterProcessMutex::Impl & obj );
 
     ///////////////////////////////////////////////////////////////////
+    /// \class InterProcessMutex::SharableLock::Impl
+    /// \brief \ref InterProcessMutex::SharableLock implementation
+    ///////////////////////////////////////////////////////////////////
+    class InterProcessMutex::SharableLock::Impl : private base::NonCopyable
+    {};
+
+    ///////////////////////////////////////////////////////////////////
+    // class InterProcessMutex::SharableLock
+    ///////////////////////////////////////////////////////////////////
+
+    InterProcessMutex::SharableLock::SharableLock()
+    {}
+
+    InterProcessMutex::SharableLock::SharableLock( InterProcessMutex & mutex_r )
+    {}
+
+    InterProcessMutex::SharableLock::SharableLock( InterProcessMutex & mutex_r, defer_lock_type )
+    {}
+
+    InterProcessMutex::SharableLock::SharableLock( InterProcessMutex & mutex_r, try_to_lock_type )
+    {}
+
+    InterProcessMutex::SharableLock::SharableLock( InterProcessMutex & mutex_r, const boost::posix_time::ptime & abs_time_r )
+    {}
+
+    InterProcessMutex::SharableLock::SharableLock( InterProcessMutex & mutex_r, unsigned seconds_r )
+    {}
+
+    InterProcessMutex::SharableLock::~SharableLock()
+    {}
+
+
+    void InterProcessMutex::SharableLock::lock()
+    {}
+
+    bool InterProcessMutex::SharableLock::try_lock()
+    {}
+
+    bool InterProcessMutex::SharableLock::timed_lock( const boost::posix_time::ptime & abs_time_r )
+    {}
+
+    void InterProcessMutex::SharableLock::unlock()
+    {}
+
+
+    bool InterProcessMutex::SharableLock::owns() const
+    {}
+
+    InterProcessMutex InterProcessMutex::SharableLock::mutex() const
+    {}
+
+    ///////////////////////////////////////////////////////////////////
     // class InterProcessMutex
     ///////////////////////////////////////////////////////////////////
 

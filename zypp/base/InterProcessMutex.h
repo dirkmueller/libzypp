@@ -21,6 +21,8 @@
 #include <boost/date_time/posix_time/posix_time.hpp>
 
 #include "zypp/base/PtrTypes.h"
+#include "zypp/base/SafeBool.h"
+#include "zypp/base/NonCopyable.h"
 
 ///////////////////////////////////////////////////////////////////
 namespace zypp
@@ -49,57 +51,20 @@ namespace zypp
       /** Native exceptions thrown by this class. */
       typedef boost::interprocess::interprocess_exception exception_type;
 
-      /** Aquire and automatically release a shared lock.
-       * \code
-       *   IPMutex mutex;
-       *
-       *   {
-       *     // construct a sharable lock
-       *     IPMutex::SharableLock slock( mutex );
-       *     ...
-       *   } // shared lock is automatically released
-       *
-       *   {
-       *     // try to construct a sharable lock within 5 seconds
-       *     IPMutex::SharableLock slock( mutex, IPMutex::wait( 5 ) );
-       *     if ( slock.owns() )
-       *     {
-       *       // obtained a sharable lock
-       *       ...
-       *     }
-       *   } // shared lock is automatically released if obtained
-       * \endcode
-       */
-      typedef boost::interprocess::sharable_lock<InterProcessMutex>	SharableLock;
-//       class SharableLock : private base::NonCopyable
-//       {
-//       public:
-// 	SharableLock();
-// 	explicit SharableLock( InterProcessMutex & mutex_r );
-//       public:
-//       };
+      /** Type to indicate to a mutex lock constructor that it must not lock the mutex. */
+      struct defer_lock_type {};
+      /** An object indicating that lock operation must be defered. */
+      static constexpr defer_lock_type defer_lock = defer_lock_type();
 
-      /** Aquire and automatically release an exclusive lock.
-       * \code
-       *   IPMutex mutex;
-       *
-       *   {
-       *     // construct an exclusive lock
-       *     IPMutex::ScopedLock slock( mutex );
-       *     ...
-       *   } // exclusive lock is automatically released
-       *
-       *   {
-       *     // try to construct an exclusive lock within 5 seconds
-       *     IPMutex::ScopedLock lock( mutex, IPMutex::wait( 5 ) );
-       *     if ( lock.owns() )
-       *     {
-       *       // obtained an exclusive lock
-       *       ...
-       *     }
-       *   } // exclusive lock is automatically released if obtained
-       * \endcode
-       */
+      /** Type to indicate to a mutex lock constructor that it must try to lock the mutex. */
+      struct try_to_lock_type {};
+      /** An object indicating that a try_lock() operation must be executed. */
+      static constexpr try_to_lock_type try_to_lock = try_to_lock_type();
+
+      /** Aquire and automatically release a shared lock. */
+      class SharableLock;
+
+      /** Aquire and automatically release an exclusive lock. */
       typedef boost::interprocess::scoped_lock<InterProcessMutex>	ScopedLock;
 
     public:
@@ -180,6 +145,86 @@ namespace zypp
   /** \relates InterProcessMutex Stream output */
   inline std::ostream & operator<<( std::ostream & str, const InterProcessMutex & obj )
   { return str << obj.asString(); }
+
+  ///////////////////////////////////////////////////////////////////
+  /// \class InterProcessMutex::SharableLock
+  /// \brief Aquire and automatically release a shared lock.
+  /// \ingroup g_RAII
+  /// \code
+  ///   InterProcessMutex mutex;
+  ///
+  ///   {
+  ///     // construct a sharable lock
+  ///     InterProcessMutex::SharableLock slock( mutex );
+  ///     ...
+  ///   } // shared lock is automatically released
+  /// \endcode
+  /// \code
+  ///   {
+  ///     // try to construct a sharable lock
+  ///     InterProcessMutex::SharableLock slock( mutex, InterProcessMutex::try_to_lock );
+  ///     if ( slock.owns() )
+  ///     {
+  ///       // obtained a sharable lock
+  ///       ...
+  ///     }
+  ///   } // shared lock is automatically released if obtained
+  /// \endcode
+  /// \code
+  ///   {
+  ///     // try to construct a sharable lock within 5 seconds
+  ///     InterProcessMutex::SharableLock slock( mutex, 5 );
+  ///     if ( slock.owns() )
+  ///     {
+  ///       // obtained a sharable lock
+  ///       ...
+  ///     }
+  ///   } // shared lock is automatically released if obtained
+  /// \endcode
+  /// \code
+  ///   {
+  ///     // may or may not need a sharable lock
+  ///     InterProcessMutex::SharableLock slock( mutex, InterProcessMutex::defer_lock );
+  ///     // no lock obtained by now
+  ///     if ( lock_needed() )
+  ///     {
+  ///       // obtain a sharable lock:
+  ///       slock.lock();
+  ///       ...
+  ///     }
+  ///     // still locked sharable if obtained
+  ///   } // shared lock is automatically released if obtained
+  /// \endcode
+  ///////////////////////////////////////////////////////////////////
+  class InterProcessMutex::SharableLock : protected base::SafeBool<SharableLock>, private base::NonCopyable
+  {
+  public:
+    SharableLock();
+    explicit SharableLock( InterProcessMutex & mutex_r );
+    SharableLock( InterProcessMutex & mutex_r, defer_lock_type );
+    SharableLock( InterProcessMutex & mutex_r, try_to_lock_type );
+    SharableLock( InterProcessMutex & mutex_r, const boost::posix_time::ptime & abs_time_r );
+    SharableLock( InterProcessMutex & mutex_r, unsigned seconds_r );
+    ~SharableLock();
+  public:
+    void lock();
+    bool try_lock();
+    bool timed_lock( const boost::posix_time::ptime & abs_time_r );
+    bool wait_lock( unsigned seconds_r )
+    { return timed_lock( wait( seconds_r ) ); }
+    void unlock();
+    bool owns() const;
+    using base::SafeBool<SharableLock>::operator bool_type;
+    InterProcessMutex mutex() const;
+  private:
+    friend SafeBool<SharableLock>::operator bool_type() const;
+    bool boolTest() const { return owns(); }
+  public:
+    class Impl;
+  private:
+    RW_pointer<Impl> _pimpl;
+  };
+  ///////////////////////////////////////////////////////////////////
 
   } // namespace base
   ///////////////////////////////////////////////////////////////////

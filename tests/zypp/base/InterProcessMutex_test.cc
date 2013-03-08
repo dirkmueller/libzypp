@@ -3,6 +3,7 @@
 
 #include <iostream>
 #include <boost/test/auto_unit_test.hpp>
+#include <boost/interprocess/sync/file_lock.hpp>
 
 #include "zypp/TmpPath.h"
 #include "zypp/base/LogTools.h"
@@ -16,6 +17,7 @@ using namespace boost::unit_test;
 
 using namespace std;
 using namespace zypp;
+using zypp::base::InterProcessMutex;
 
 static filesystem::TmpFile tmpFile;
 static Pathname mutexPath( tmpFile.path() );
@@ -71,7 +73,7 @@ int lockStatus()
 
 BOOST_AUTO_TEST_CASE(basic_file_lock_behavior)
 {
-  // Test basic behavior of file_lock regarding exceptions
+  // Test basic behavior of boost::file_lock regarding exceptions
   // thrown (or not thrown) on certain command combinations.
   //
   // E.g. lock exclusively then unlock shared -> no exception
@@ -112,5 +114,25 @@ BOOST_AUTO_TEST_CASE(basic_file_lock_behavior)
   boost::interprocess::scoped_lock<lock_type> a;
   boost::interprocess::scoped_lock<lock_type> b;
   BOOST_CHECK_THROW( b.lock(), boost::interprocess::lock_exception );
+}
+
+BOOST_AUTO_TEST_CASE(basic_mutex)
+{
+  // Basic operations switch to the requested mutex state. This differs from
+  // InterProcessMutex::{SharableLock,ScopedLock} where requesting e.g. a
+  // SharableLock is also fulfilled by staying in EXCLUSIVE_LOCK state.
+  InterProcessMutex mutex( mutexPath );
+  BOOST_CHECK_EQUAL( mutex.state(), InterProcessMutex::UNLOCKED );
+
+#define SWITCH_STATE(CMD,STATE )	\
+  mutex.CMD(); BOOST_CHECK_EQUAL( mutex.state(), InterProcessMutex::STATE )
+
+  SWITCH_STATE( lock_sharable,	SHARED_LOCK );
+  SWITCH_STATE( lock,		EXCLUSIVE_LOCK );
+  SWITCH_STATE( unlock_sharable,UNLOCKED );	//<  unlock_sharable == unlock
+
+  SWITCH_STATE( lock,		EXCLUSIVE_LOCK );
+  SWITCH_STATE( lock_sharable,	SHARED_LOCK );
+  SWITCH_STATE( unlock,		UNLOCKED );	//<  unlock_sharable == unlock
 }
 
